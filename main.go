@@ -13,7 +13,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-func searchFiles(root, filename string, seen chan<- string, wg *sync.WaitGroup) {
+func searchFiles(root, filename string, resultsChan chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -22,14 +22,14 @@ func searchFiles(root, filename string, seen chan<- string, wg *sync.WaitGroup) 
 		}
 
 		if !info.IsDir() && strings.Contains(info.Name(), filename) {
-			seen <- path
+			resultsChan <- path
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		seen <- fmt.Sprintf("Error: %v", err)
+		resultsChan <- fmt.Sprintf("Error: %v", err)
 	}
 }
 
@@ -82,6 +82,7 @@ func main() {
 		mu.Lock()
 		seen = make(map[string]struct{})
 		results = nil
+        selectedIndex = -1
 		mu.Unlock()
 
 		wg.Add(1)
