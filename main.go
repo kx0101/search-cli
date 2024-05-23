@@ -77,16 +77,7 @@ func main() {
 	selectedIndex := -1
 
 	inputField.SetChangedFunc(func(text string) {
-		textView.Clear()
-
-		mu.Lock()
-		seen = make(map[string]struct{})
-		results = nil
-		selectedIndex = -1
-		mu.Unlock()
-
-		wg.Add(1)
-		go searchFiles(".", text, resultsChan, &wg)
+		resetSearch(text, textView, &mu, seen, &results, &selectedIndex, &wg, resultsChan)
 	})
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -171,4 +162,22 @@ func moveScreenToHighlightedCentered(textView *tview.TextView, selectedIndex int
 
 		textView.ScrollTo(centerOffset, 0)
 	}
+}
+
+func resetSearch(text string, textView *tview.TextView, mu *sync.Mutex, seen map[string]struct{}, results *[]string, selectedIndex *int, wg *sync.WaitGroup, resultsChan chan string) {
+	textView.Clear()
+
+	mu.Lock()
+
+	for k := range seen {
+		delete(seen, k)
+	}
+
+	*results = nil
+	*selectedIndex = -1
+
+	mu.Unlock()
+
+	wg.Add(1)
+	go searchFiles(".", text, resultsChan, wg)
 }
