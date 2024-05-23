@@ -82,7 +82,7 @@ func main() {
 		mu.Lock()
 		seen = make(map[string]struct{})
 		results = nil
-        selectedIndex = -1
+		selectedIndex = -1
 		mu.Unlock()
 
 		wg.Add(1)
@@ -158,4 +158,17 @@ func updateTextViewSelection(textView *tview.TextView, selectedIndex int, seen [
 	}
 
 	textView.SetText(newText.String())
+	moveScreenToHighlightedCentered(textView, selectedIndex)
+}
+
+func moveScreenToHighlightedCentered(textView *tview.TextView, selectedIndex int) {
+	_, _, _, height := textView.GetRect()
+	if height > 0 {
+		centerOffset := selectedIndex - height/2
+		if centerOffset < 0 {
+			centerOffset = 0
+		}
+
+		textView.ScrollTo(centerOffset, 0)
+	}
 }
