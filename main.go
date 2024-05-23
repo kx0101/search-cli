@@ -13,7 +13,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-func searchFiles(root, filename string, results chan<- string, wg *sync.WaitGroup) {
+func searchFiles(root, filename string, seen chan<- string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -22,14 +22,14 @@ func searchFiles(root, filename string, results chan<- string, wg *sync.WaitGrou
 		}
 
 		if !info.IsDir() && strings.Contains(info.Name(), filename) {
-			results <- path
+			seen <- path
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		results <- fmt.Sprintf("Error: %v", err)
+		seen <- fmt.Sprintf("Error: %v", err)
 	}
 }
 
@@ -51,6 +51,7 @@ func main() {
 
 	var mu sync.Mutex
 
+	seen := make(map[string]struct{})
 	var results []string
 
 	resultsChan := make(chan string)
@@ -60,11 +61,14 @@ func main() {
 		for result := range resultsChan {
 			mu.Lock()
 
-			results = append(results, result)
+			if _, exists := seen[result]; !exists {
+				seen[result] = struct{}{}
+				results = append(results, result)
 
-			app.QueueUpdateDraw(func() {
-				fmt.Fprintf(textView, "%s\n", result)
-			})
+				app.QueueUpdateDraw(func() {
+					fmt.Fprintf(textView, "%s\n", result)
+				})
+			}
 
 			mu.Unlock()
 		}
@@ -75,8 +79,10 @@ func main() {
 	inputField.SetChangedFunc(func(text string) {
 		textView.Clear()
 
+		mu.Lock()
+		seen = make(map[string]struct{})
 		results = nil
-		selectedIndex = -1
+		mu.Unlock()
 
 		wg.Add(1)
 		go searchFiles(".", text, resultsChan, &wg)
@@ -90,7 +96,7 @@ func main() {
 				updateTextViewSelection(textView, selectedIndex, results)
 			}
 		case tcell.KeyDown:
-			if selectedIndex < len(results)-1 {
+			if selectedIndex < len(seen)-1 {
 				selectedIndex++
 				updateTextViewSelection(textView, selectedIndex, results)
 			}
@@ -100,7 +106,7 @@ func main() {
 	})
 
 	inputField.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter && selectedIndex >= 0 && selectedIndex < len(results) {
+		if key == tcell.KeyEnter && selectedIndex >= 0 && selectedIndex < len(seen) {
 			text := inputField.GetText()
 			if len(text) == 0 && selectedIndex < 0 {
 				return
@@ -137,10 +143,10 @@ func openFile(selectedPath string) error {
 	}
 }
 
-func updateTextViewSelection(textView *tview.TextView, selectedIndex int, results []string) {
+func updateTextViewSelection(textView *tview.TextView, selectedIndex int, seen []string) {
 	var newText strings.Builder
 
-	for i, result := range results {
+	for i, result := range seen {
 		if i == selectedIndex {
 			newText.WriteString("[")
 			fmt.Fprintf(&newText, "[green]%s[-]", result)
